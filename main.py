@@ -26,7 +26,7 @@ def run_flask():
 # ===== إعدادات البوت =====
 BOT_TOKEN    = os.environ.get("BOT_TOKEN")
 CHANNEL_LINK = "https://t.me/+wm-XT1rWsHhkNjJk"
-ADMIN_ID     = 6656665257
+ADMIN_ID     = 8136877112
 
 # ===== Supabase =====
 SUPABASE_URL = os.environ.get("SUPABASE_URL")
