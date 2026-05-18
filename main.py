@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-EL FER3OON BOT - بوت الفرعون للتداول مع Supabase
+EL FER3OON BOT - Trading Bot with Supabase
 """
 
 import os
@@ -12,7 +12,7 @@ from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-# ===== Flask للـ uptime =====
+# ===== Flask for uptime =====
 flask_app = Flask(__name__)
 
 @flask_app.route('/')
@@ -23,7 +23,7 @@ def run_flask():
     port = int(os.environ.get("PORT", 8080))
     flask_app.run(host="0.0.0.0", port=port)
 
-# ===== إعدادات البوت =====
+# ===== Bot Settings =====
 BOT_TOKEN    = os.environ.get("BOT_TOKEN")
 CHANNEL_LINK = "https://t.me/+wm-XT1rWsHhkNjJk"
 ADMIN_ID     = 8136877112
@@ -47,10 +47,10 @@ def db_get_user(chat_id):
             return data[0] if data else None
         return None
     except Exception as e:
-        print(f"خطأ db_get_user: {e}")
+        print(f"Error db_get_user: {e}")
         return None
 
-def db_add_user(chat_id, lang="ar"):
+def db_add_user(chat_id, lang="en"):
     requests.post(f"{SUPABASE_URL}/users", headers=get_headers(), json={
         "chat_id": chat_id, "lang": lang, "joined": datetime.now().isoformat()
     })
@@ -66,12 +66,12 @@ def db_count_users():
     r = requests.get(f"{SUPABASE_URL}/users?select=count", headers={**get_headers(), "Prefer": "count=exact"})
     return r.headers.get("content-range", "0").split("/")[-1]
 
-# ===== file_id للميديا =====
+# ===== Media file_ids =====
 VIDEO_1_FILE_ID = "BAACAgQAAxkBAAMFagQdBD7buoKR0wGfXZiHlj4jRikAAp4dAAIzMSFQTVU6dmVLq5c7BA"
 VIDEO_2_FILE_ID = "BAACAgQAAxkBAAMJagQew0tLeJfig6DC0MARWvH2IfwAAlEmAAI5UCBQFYy2xkG36dM7BA"
 PHOTO_3_FILE_ID = "AgACAgQAAxkBAAMHagQdLlbUSndqjkB_1Y9GLNAFyRgAAm0OaxszMSFQvRXmZGUb_6IBAAMCAAN5AAM7BA"
 
-# ===== نصوص الرسائل =====
+# ===== Message Texts =====
 MSG_1_AR = """🔥 مع تطبيقنا للتداول، الموضوع صار أسهل بكتير!
 إشارات قوية ودقيقة على منصة Quotex 📈⚡
 
@@ -114,33 +114,33 @@ Use bonus code 🎯
 SPECIAL100
 Start trading with more capital 👑"""
 
-WELCOME_AR = """حياك الله {name} 👑
+WELCOME_EN = """Welcome {name} 👑
 
-اضغط الزر أدناه لإنشاء رابط الدعوة الخاص بك والدخول مباشرة إلى القناة العامة.
-جاهز تنطلق؟ 🚀"""
+Press the button below to generate your personal invite link and join the public channel directly.
+Ready to go? 🚀"""
 
-# ===== كيبورد =====
-def get_keyboard(lang="ar"):
+# ===== Keyboard =====
+def get_keyboard(lang="en"):
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("👑 ادخل إلى القناة العامة", url=CHANNEL_LINK)],
+        [InlineKeyboardButton("👑 Enter the Public Channel", url=CHANNEL_LINK)],
     ])
 
 # ===== Broadcast =====
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
-        await update.message.reply_text("❌ مش مسموح")
+        await update.message.reply_text("❌ Not allowed")
         return
 
     users = db_get_all_users()
     if not users:
-        await update.message.reply_text("❌ مفيش مستخدمين")
+        await update.message.reply_text("❌ No users found")
         return
 
     msg = update.message
     success = 0
     failed = 0
 
-    await update.message.reply_text(f"📤 جاري الإرسال لـ {len(users)} مستخدم...")
+    await update.message.reply_text(f"📤 Sending to {len(users)} users...")
 
     for user in users:
         uid = user["chat_id"]
@@ -161,32 +161,32 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             failed += 1
 
-    await update.message.reply_text(f"✅ تم!\nنجح: {success}\nفشل: {failed}")
+    await update.message.reply_text(f"✅ Done!\nSuccess: {success}\nFailed: {failed}")
 
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     count = db_count_users()
-    await update.message.reply_text(f"📊 إحصائيات البوت:\n👥 عدد المستخدمين: {count}")
+    await update.message.reply_text(f"📊 Bot Statistics:\n👥 Total Users: {count}")
 
 
-# ===== أوامر البوت =====
+# ===== Bot Commands =====
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    first_name = user.first_name or "صديقي"
+    first_name = user.first_name or "Friend"
     chat_id = user.id
 
     existing = db_get_user(chat_id)
     is_new = existing is None
 
     if is_new:
-        db_add_user(chat_id, "ar")
-        lang = "ar"
+        db_add_user(chat_id, "en")
+        lang = "en"
     else:
-        lang = existing.get("lang", "ar")
+        lang = existing.get("lang", "en")
 
-    msg = WELCOME_AR.format(name=first_name)
+    msg = WELCOME_EN.format(name=first_name)
     await update.message.reply_text(msg, reply_markup=get_keyboard())
 
 
@@ -205,22 +205,22 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def channel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [[InlineKeyboardButton("👑 انضم للقناة", url=CHANNEL_LINK)]]
-    await update.message.reply_text("📢 قناة الفرعون للإشارات 🚀", reply_markup=InlineKeyboardMarkup(keyboard))
+    keyboard = [[InlineKeyboardButton("👑 Join the Channel", url=CHANNEL_LINK)]]
+    await update.message.reply_text("📢 EL FER3OON Signals Channel 🚀", reply_markup=InlineKeyboardMarkup(keyboard))
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "📋 الأوامر:\n"
-        "/start - رسالة الترحيب\n"
-        "/channel - رابط القناة\n"
-        "/broadcast نص - إرسال للكل\n"
-        "/stats - إحصائيات\n"
-        "/help - المساعدة"
+        "📋 Commands:\n"
+        "/start - Welcome message\n"
+        "/channel - Channel link\n"
+        "/broadcast text - Send to all users\n"
+        "/stats - Statistics\n"
+        "/help - Help"
     )
 
 
-# ===== تشغيل البوت =====
+# ===== Run the Bot =====
 def main():
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
@@ -235,7 +235,7 @@ def main():
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.VIDEO | filters.PHOTO, get_file_id))
 
-    print("✅ بوت الفرعون شغال! 👑")
+    print("✅ EL FER3OON Bot is running! 👑")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
 
 
