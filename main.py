@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-EL FER3OON - AI Market Analytics Platform Bot
+EL FER3OON BOT - Trading Bot with Supabase
 """
 
 import os
@@ -10,23 +10,20 @@ import requests
 from datetime import datetime
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import (
-    Application, CommandHandler, CallbackQueryHandler,
-    ContextTypes, MessageHandler, filters
-)
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes, MessageHandler, filters
 
-# ===== Flask Uptime Server =====
+# ===== Flask for uptime =====
 flask_app = Flask(__name__)
 
 @flask_app.route('/')
 def home():
-    return "EL FER3OON Analytics Platform is running! 👑"
+    return "EL FER3OON BOT is running! 👑"
 
 def run_flask():
     port = int(os.environ.get("PORT", 8080))
     flask_app.run(host="0.0.0.0", port=port)
 
-# ===== Configuration =====
+# ===== Bot Settings =====
 BOT_TOKEN    = os.environ.get("BOT_TOKEN")
 CHANNEL_LINK = "https://t.me/+wm-XT1rWsHhkNjJk"
 ADMIN_ID     = 8136877112
@@ -46,200 +43,89 @@ def db_get_user(chat_id):
     try:
         r = requests.get(f"{SUPABASE_URL}/users?chat_id=eq.{chat_id}", headers=get_headers())
         data = r.json()
-        return data[0] if isinstance(data, list) and data else None
+        if isinstance(data, list):
+            return data[0] if data else None
+        return None
     except Exception as e:
         print(f"Error db_get_user: {e}")
         return None
 
 def db_add_user(chat_id, lang="en"):
-    try:
-        requests.post(f"{SUPABASE_URL}/users", headers=get_headers(), json={
-            "chat_id": chat_id, "lang": lang, "joined": datetime.now().isoformat()
-        })
-    except Exception as e:
-        print(f"Error db_add_user: {e}")
+    requests.post(f"{SUPABASE_URL}/users", headers=get_headers(), json={
+        "chat_id": chat_id, "lang": lang, "joined": datetime.now().isoformat()
+    })
+
+def db_update_lang(chat_id, lang):
+    requests.patch(f"{SUPABASE_URL}/users?chat_id=eq.{chat_id}", headers=get_headers(), json={"lang": lang})
 
 def db_get_all_users():
-    try:
-        r = requests.get(f"{SUPABASE_URL}/users?select=chat_id,lang", headers=get_headers())
-        return r.json()
-    except Exception as e:
-        print(f"Error db_get_all_users: {e}")
-        return []
+    r = requests.get(f"{SUPABASE_URL}/users?select=chat_id,lang", headers=get_headers())
+    return r.json()
 
 def db_count_users():
-    try:
-        r = requests.get(f"{SUPABASE_URL}/users?select=count",
-                         headers={**get_headers(), "Prefer": "count=exact"})
-        return r.headers.get("content-range", "0").split("/")[-1]
-    except Exception as e:
-        print(f"Error db_count_users: {e}")
-        return "0"
+    r = requests.get(f"{SUPABASE_URL}/users?select=count", headers={**get_headers(), "Prefer": "count=exact"})
+    return r.headers.get("content-range", "0").split("/")[-1]
 
-# ===== Main Menu Keyboard =====
-def main_menu_keyboard():
-    return InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("📊 Market Overview", callback_data="market_overview"),
-            InlineKeyboardButton("🤖 AI Analytics",    callback_data="ai_analytics")
-        ],
-        [
-            InlineKeyboardButton("⚡ Live Updates",    callback_data="live_updates"),
-            InlineKeyboardButton("🛠 Smart Tools",     callback_data="smart_tools")
-        ],
-        [
-            InlineKeyboardButton("📚 Platform Info",  callback_data="platform_info")
-        ],
-        [
-            InlineKeyboardButton("🚀 Open Platform",  url=CHANNEL_LINK)
-        ]
-    ])
-
-def back_keyboard():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("🔙 Back to Menu", callback_data="back_menu")]
-    ])
+# ===== Media file_ids =====
+VIDEO_1_FILE_ID = "BAACAgQAAxkBAAMFagQdBD7buoKR0wGfXZiHlj4jRikAAp4dAAIzMSFQTVU6dmVLq5c7BA"
+VIDEO_2_FILE_ID = "BAACAgQAAxkBAAMJagQew0tLeJfig6DC0MARWvH2IfwAAlEmAAI5UCBQFYy2xkG36dM7BA"
+PHOTO_3_FILE_ID = "AgACAgQAAxkBAAMHagQdLlbUSndqjkB_1Y9GLNAFyRgAAm0OaxszMSFQvRXmZGUb_6IBAAMCAAN5AAM7BA"
 
 # ===== Message Texts =====
-WELCOME_MSG = """👑 *Welcome to EL FER3OON*
+MSG_1_AR = """🔥 مع تطبيقنا للتداول، الموضوع صار أسهل بكتير!
+إشارات قوية ودقيقة على منصة Quotex 📈⚡
 
-Your AI-powered market analytics and smart monitoring platform.
+تابع الصفقات، حقق نتائج ممتازة، واسحب أرباحك بكل سهولة 💸
+ناس كتير بلشت معنا بخطوات بسيطة واليوم عم تحقق دخل يومي محترم 🚀
 
-Access real-time market insights, advanced analytics tools, and intelligent tracking systems — all in one place.
+إذا بدك تبدأ صح وتدخل السوق بثقة، جرّب التطبيق وهلّق دورك تكون من الرابحين 👑"""
 
-_Choose an option below to get started:_"""
+MSG_1_EN = """🔥 With our trading app, it's never been easier!
+Powerful and accurate signals on Quotex 📈⚡
 
-MARKET_OVERVIEW_MSG = """📊 *Market Overview*
+Track trades, achieve great results, and withdraw your profits easily 💸
+Many people started with us and today earn a decent daily income 🚀
 
-Current market activity:
+Join the winners now 👑"""
 
-• Volatility: Moderate
-• Trend Strength: Bullish
-• Market Sentiment: Stable
-• Session Status: Active
+MSG_2_AR = """🚀 تطبيق الفرعون للتداول صار جاهز! 👑
+كل اللي تحتاجه بإيدك: إشارات دقيقة، تنبيهات سريعة، وتحليل يساعدك تدخل بأفضل وقت على Quotex 📊⚡
+التطبيق معمول ليخلي التداول أبسط وأوضح حتى لو كنت مبتدئ 💡
+ابدأ بخطوات صح، تابع الإشارات، وشوف الفرق بنفسك 💰🔥"""
 
-_Analytics are updated continuously._"""
+MSG_2_EN = """🚀 EL FER3OON Trading App is ready! 👑
+Accurate signals, fast alerts, and analysis to help you enter at the best time on Quotex 📊⚡
+Designed to make trading simpler even if you're a beginner 💡
+Start right, follow the signals, and see the difference 💰🔥"""
 
-AI_ANALYTICS_MSG = """🤖 *AI Analytics Monitor*
+MSG_3_AR = """🎁 سجل من خلالنا واحصل على بونص ترحيبي 100% من قيمة أول إيداع على Quotex 💸🔥
+يعني لو أودعت 100$ رح يصير رصيدك 200$ مباشرة 🚀
+سجّل من الرابط 👇
+https://broker-qx.pro/sign-up/?lid=643973
+واستخدم كود البونص 🎯
+SPECIAL100
+فرصة قوية تبدأ تداولك برأس مال أكبر وتحقيق نتائج أفضل 👑"""
 
-Our AI systems continuously track:
+MSG_3_EN = """🎁 Register through us and get a 100% welcome bonus on your first deposit on Quotex 💸🔥
+Deposit $100 and your balance becomes $200 instantly 🚀
+Register here 👇
+https://broker-qx.pro/sign-up/?lid=643973
+Use bonus code 🎯
+SPECIAL100
+Start trading with more capital 👑"""
 
-• Trend Momentum
-• Price Movement Patterns
-• Market Behavior Analysis
-• Volume Activity
-• Real-Time Sentiment Tracking
+WELCOME_EN = """Welcome {name} 👑
 
-_Advanced monitoring systems are active._"""
+Press the button below to generate your personal invite link and join the public channel directly.
+Ready to go? 🚀"""
 
-LIVE_UPDATES_MSG = """⚡ *Live Updates*
+# ===== Keyboard =====
+def get_keyboard(lang="en"):
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("👑 Enter the Public Channel", url=CHANNEL_LINK)],
+    ])
 
-Our live feed provides:
-
-• Market Movement Tracking
-• Session Notifications
-• Trend Change Alerts
-• Real-Time Monitoring
-
-_Updates are refreshed automatically._"""
-
-SMART_TOOLS_MSG = """🛠 *Smart Tools*
-
-Available platform tools:
-
-• 🔍 Market Scanner
-• 📈 Trend Analysis
-• 🕐 Session Monitoring
-• 🔔 Smart Notifications
-• 📉 Momentum Tracking
-• ⚙️ Signal Filtering
-
-_All tools are powered by AI._"""
-
-PLATFORM_INFO_MSG = """📚 *About EL FER3OON*
-
-EL FER3OON is a smart analytics platform designed to provide advanced market monitoring tools and AI-powered insights.
-
-Our platform offers:
-• Professional-grade analytics
-• Real-time market intelligence
-• Smart automated monitoring
-• Clean and intuitive interface
-
-_Powered by Data. Driven by AI._"""
-
-HELP_MSG = """📋 *Help & Commands*
-
-/start — Launch the platform
-/help — Show this help menu
-/about — About EL FER3OON
-
-Use the interactive menu to access all platform features and analytics tools.
-
-_Tap any button to explore._"""
-
-ABOUT_MSG = """👑 *EL FER3OON*
-
-An AI-powered market analytics and smart monitoring platform.
-
-We provide real-time insights, advanced tracking tools, and intelligent market analysis to help you stay informed.
-
-_Powered by Data. Driven by AI._"""
-
-# ===== Handlers =====
-
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    chat_id = update.effective_user.id
-    if not db_get_user(chat_id):
-        db_add_user(chat_id)
-    await update.message.reply_text(
-        WELCOME_MSG,
-        parse_mode="Markdown",
-        reply_markup=main_menu_keyboard()
-    )
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        HELP_MSG,
-        parse_mode="Markdown",
-        reply_markup=main_menu_keyboard()
-    )
-
-async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text(
-        ABOUT_MSG,
-        parse_mode="Markdown",
-        reply_markup=main_menu_keyboard()
-    )
-
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.callback_query
-    await query.answer()
-    data = query.data
-
-    responses = {
-        "market_overview": MARKET_OVERVIEW_MSG,
-        "ai_analytics":    AI_ANALYTICS_MSG,
-        "live_updates":    LIVE_UPDATES_MSG,
-        "smart_tools":     SMART_TOOLS_MSG,
-        "platform_info":   PLATFORM_INFO_MSG,
-    }
-
-    if data == "back_menu":
-        await query.edit_message_text(
-            WELCOME_MSG,
-            parse_mode="Markdown",
-            reply_markup=main_menu_keyboard()
-        )
-    elif data in responses:
-        await query.edit_message_text(
-            responses[data],
-            parse_mode="Markdown",
-            reply_markup=back_keyboard()
-        )
-
-# ===== Admin Commands =====
-
+# ===== Broadcast =====
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         await update.message.reply_text("❌ Not allowed")
@@ -277,11 +163,32 @@ async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(f"✅ Done!\nSuccess: {success}\nFailed: {failed}")
 
+
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
         return
     count = db_count_users()
     await update.message.reply_text(f"📊 Bot Statistics:\n👥 Total Users: {count}")
+
+
+# ===== Bot Commands =====
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    first_name = user.first_name or "Friend"
+    chat_id = user.id
+
+    existing = db_get_user(chat_id)
+    is_new = existing is None
+
+    if is_new:
+        db_add_user(chat_id, "en")
+        lang = "en"
+    else:
+        lang = existing.get("lang", "en")
+
+    msg = WELCOME_EN.format(name=first_name)
+    await update.message.reply_text(msg, reply_markup=get_keyboard())
+
 
 async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_user.id != ADMIN_ID:
@@ -291,24 +198,46 @@ async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif update.message.photo:
         await update.message.reply_text(f"PHOTO_ID:\n`{update.message.photo[-1].file_id}`", parse_mode="Markdown")
 
-# ===== Main =====
 
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+
+
+async def channel_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = [[InlineKeyboardButton("👑 Join the Channel", url=CHANNEL_LINK)]]
+    await update.message.reply_text("📢 EL FER3OON Signals Channel 🚀", reply_markup=InlineKeyboardMarkup(keyboard))
+
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text(
+        "📋 Commands:\n"
+        "/start - Welcome message\n"
+        "/channel - Channel link\n"
+        "/broadcast text - Send to all users\n"
+        "/stats - Statistics\n"
+        "/help - Help"
+    )
+
+
+# ===== Run the Bot =====
 def main():
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
 
     app = Application.builder().token(BOT_TOKEN).build()
 
-    app.add_handler(CommandHandler("start",     start))
-    app.add_handler(CommandHandler("help",      help_command))
-    app.add_handler(CommandHandler("about",     about_command))
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("channel", channel_command))
     app.add_handler(CommandHandler("broadcast", broadcast_command))
-    app.add_handler(CommandHandler("stats",     stats_command))
+    app.add_handler(CommandHandler("stats", stats_command))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.VIDEO | filters.PHOTO, get_file_id))
 
-    print("✅ EL FER3OON Analytics Platform is running! 👑")
+    print("✅ EL FER3OON Bot is running! 👑")
     app.run_polling(allowed_updates=Update.ALL_TYPES, drop_pending_updates=True)
+
 
 if __name__ == "__main__":
     main()
