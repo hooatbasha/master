@@ -6,9 +6,10 @@ EL FER3OON - AI Market Analytics Platform Bot
 import os
 import asyncio
 import threading
-import requests
 from datetime import datetime
 from flask import Flask
+import psycopg2
+import psycopg2.extras
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
@@ -30,53 +31,83 @@ def run_flask():
 BOT_TOKEN    = os.environ.get("BOT_TOKEN")
 CHANNEL_LINK = "https://t.me/+wm-XT1rWsHhkNjJk"
 ADMIN_ID     = 8136877112
+DATABASE_URL = os.environ.get("DATABASE_URL")
 
-# ===== Supabase =====
-SUPABASE_URL = os.environ.get("SUPABASE_URL")
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY")
+# ===== Database =====
+def get_conn():
+    return psycopg2.connect(DATABASE_URL, sslmode="require")
 
-def get_headers():
-    return {
-        "apikey": SUPABASE_KEY,
-        "Authorization": f"Bearer {SUPABASE_KEY}",
-        "Content-Type": "application/json"
-    }
+def init_db():
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                chat_id BIGINT PRIMARY KEY,
+                joined TIMESTAMP DEFAULT NOW()
+            )
+        """)
+        conn.commit()
+        cur.close()
+        conn.close()
+        print("✅ Database initialized")
+    except Exception as e:
+        print(f"Error init_db: {e}")
 
 def db_get_user(chat_id):
     try:
-        r = requests.get(f"{SUPABASE_URL}/users?chat_id=eq.{chat_id}", headers=get_headers(), timeout=5)
-        data = r.json()
-        return data[0] if isinstance(data, list) and data else None
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT chat_id FROM users WHERE chat_id = %s", (chat_id,))
+        row = cur.fetchone()
+        cur.close()
+        conn.close()
+        return row
     except Exception as e:
         print(f"Error db_get_user: {e}")
         return None
 
-def db_add_user(chat_id, lang="en"):
+def db_add_user(chat_id):
     try:
-        requests.post(f"{SUPABASE_URL}/users", headers=get_headers(), json={
-            "chat_id": chat_id, "lang": lang, "joined": datetime.now().isoformat()
-        }, timeout=5)
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO users (chat_id) VALUES (%s) ON CONFLICT DO NOTHING",
+            (chat_id,)
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
     except Exception as e:
         print(f"Error db_add_user: {e}")
 
 def db_get_all_users():
     try:
-        r = requests.get(f"{SUPABASE_URL}/users?select=chat_id,lang", headers=get_headers(), timeout=5)
-        return r.json()
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT chat_id FROM users")
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        return [{"chat_id": r[0]} for r in rows]
     except Exception as e:
         print(f"Error db_get_all_users: {e}")
         return []
 
 def db_count_users():
     try:
-        r = requests.get(f"{SUPABASE_URL}/users?select=count",
-                         headers={**get_headers(), "Prefer": "count=exact"}, timeout=5)
-        return r.headers.get("content-range", "0").split("/")[-1]
+        conn = get_conn()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM users")
+        count = cur.fetchone()[0]
+        cur.close()
+        conn.close()
+        return count
     except Exception as e:
         print(f"Error db_count_users: {e}")
-        return "0"
+        return 0
 
-# ===== Main Menu Keyboard =====
+# ===== Keyboards =====
 def main_menu_keyboard():
     return InlineKeyboardMarkup([
         [
@@ -168,24 +199,6 @@ Our platform offers:
 
 _Powered by Data. Driven by AI._"""
 
-HELP_MSG = """📋 *Help & Commands*
-
-/start — Launch the platform
-/help — Show this help menu
-/about — About EL FER3OON
-
-Use the interactive menu to access all platform features and analytics tools.
-
-_Tap any button to explore._"""
-
-ABOUT_MSG = """👑 *EL FER3OON*
-
-An AI-powered market analytics and smart monitoring platform.
-
-We provide real-time insights, advanced tracking tools, and intelligent market analysis to help you stay informed.
-
-_Powered by Data. Driven by AI._"""
-
 # ===== Handlers =====
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -203,14 +216,20 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        HELP_MSG,
+        "📋 *Help & Commands*\n\n"
+        "/start — Launch the platform\n"
+        "/help — Show this help menu\n"
+        "/about — About EL FER3OON\n\n"
+        "_Use the interactive menu to access all platform features._",
         parse_mode="Markdown",
         reply_markup=main_menu_keyboard()
     )
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        ABOUT_MSG,
+        "👑 *EL FER3OON*\n\n"
+        "An AI-powered market analytics and smart monitoring platform.\n\n"
+        "_Powered by Data. Driven by AI._",
         parse_mode="Markdown",
         reply_markup=main_menu_keyboard()
     )
@@ -297,6 +316,8 @@ async def get_file_id(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ===== Main =====
 
 def main():
+    init_db()
+
     flask_thread = threading.Thread(target=run_flask, daemon=True)
     flask_thread.start()
 
